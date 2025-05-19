@@ -1,7 +1,7 @@
 
 
 /data
-data.zip
+*.zip
 /models
 __*
 *.pth

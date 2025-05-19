@@ -52,7 +52,7 @@ class ImageDataset(Dataset):
     
     def __getitem__(self, index):
         if self.is_test:
-            img_path = self.samples
+            img_path = self.samples[index][0]
             image = Image.open(img_path).convert('RGB')
             if self.transform:
                 image = self.transform(image)
