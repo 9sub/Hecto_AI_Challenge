@@ -5,3 +5,5 @@
 /models
 __*
 *.pth
+/wandb
+/output

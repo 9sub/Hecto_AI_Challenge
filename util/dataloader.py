@@ -65,3 +65,49 @@ class ImageDataset(Dataset):
             return image, label
 
 
+
+class MultiTaskImageDataset(Dataset):
+    def __init__(self, root_dir, crop_dir, transform=None):
+        
+        self.root_dir = root_dir
+        self.crop_dir = crop_dir
+        self.transform = transform
+        self.samples = []
+
+        self.classes = [
+            d for d in sorted(os.listdir(root_dir))
+            if os.path.isdir(os.path.join(root_dir, d))
+        ]
+        self.class_to_index = {class_ : i for i, class_ in enumerate(self.classes)}
+
+        for class_name in self.classes:
+            origin_class_dir = os.path.join(root_dir, class_name)
+            crop_class_dir = os.path.join(crop_dir, class_name)
+
+            if not os.path.exists(crop_class_dir):
+                raise ValueError(f"크롭 폴더가 없습니다: {crop_class_dir}")
+            
+            for file in os.listdir(origin_class_dir):
+                if file.lower().endswith('.jpg'):
+                    origin_path = os.path.join(origin_class_dir, file)
+                    crop_path = os.path.join(crop_class_dir, file)
+                    if os.path.exists(crop_path):
+                        label = self.class_to_index[class_name]
+                        self.samples.append((origin_path, crop_path, label))
+                    else:
+                        print(f"크롭 이미지 없음 {crop_path}")
+
+
+    def __len__(self):
+        return len(self.samples)
+    
+    def __getitem__(self, index):
+        origin_path, crop_path, label = self.samples[index]
+        origin_img = Image.open(origin_path).convert('RGB')
+        crop_img = Image.open(crop_path).convert('RGB')
+
+        if self.transform:
+            origin_img = self.transform(origin_img)
+            crop_img = self.transform(crop_img)
+
+        return origin_img, crop_img, label

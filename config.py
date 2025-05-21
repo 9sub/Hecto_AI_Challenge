@@ -8,3 +8,6 @@ seed = 42
 
 train_root = './data/train'
 test_root = './data/test'
+crop_root = './data/train_crop'
+
+model_name = 'Multitask efficientNet'
