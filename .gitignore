@@ -7,3 +7,6 @@ __*
 *.pth
 /wandb
 /output
+
+*.csv
+misclassified_samples.csv
