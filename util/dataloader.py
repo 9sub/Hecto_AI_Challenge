@@ -111,3 +111,51 @@ class MultiTaskImageDataset(Dataset):
             crop_img = self.transform(crop_img)
 
         return origin_img, crop_img, label
+
+
+
+class FineGrainImageDataset(Dataset):
+    def __init__(self, root_dir, transform=None, is_test=False):
+        self.transform = transform
+        self.is_test = is_test
+
+        # 테스트면 파일 경로 리스트만 저장
+        if is_test:
+            self.samples = sorted([
+                os.path.join(root_dir, f)
+                for f in os.listdir(root_dir)
+                if f.lower().endswith('.jpg')
+            ])
+            return
+
+        # 학습/검증용
+        # 클래스 이름은 폴더명(예: "소나타_2018_2019")
+        self.classes = sorted([
+            d for d in os.listdir(root_dir)
+            if os.path.isdir(os.path.join(root_dir, d))
+        ])
+        self.class_to_idx = {c:i for i,c in enumerate(self.classes)}
+
+        self.samples = []
+        for c in self.classes:
+            folder = os.path.join(root_dir, c)
+            for f in os.listdir(folder):
+                if f.lower().endswith('.jpg'):
+                    self.samples.append(
+                        (os.path.join(folder,f), self.class_to_idx[c])
+                    )
+
+    def __len__(self):
+        return len(self.samples) if not self.is_test else len(self.samples)
+
+    def __getitem__(self, idx):
+        if self.is_test:
+            path = self.samples[idx]
+            img  = Image.open(path).convert('RGB')
+            if self.transform: img = self.transform(img)
+            return img
+        else:
+            path, lbl = self.samples[idx]
+            img = Image.open(path).convert('RGB')
+            if self.transform: img = self.transform(img)
+            return img, lbl

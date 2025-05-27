@@ -3,12 +3,14 @@ from torch.utils.data import DataLoader
 import torch
 import torch.nn.functional as F
 import pandas as pd
+from tqdm import tqdm
+from util.model import FineGrainResNet50
 
-from util.model import ResNet152, MultiTaskModel
-from util.dataloader import ImageDataset
+from util.model import ResNet152, MultiTaskModel, SwinArcClassifier
+from util.dataloader import ImageDataset, FineGrainImageDataset
 import config
 
-device = "mps"
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 val_transform = transforms.Compose([
     transforms.Resize((config.img_size, config.img_size)),
@@ -20,11 +22,22 @@ val_transform = transforms.Compose([
 test_dataset = ImageDataset(config.test_root, transform=val_transform, is_test=True)
 test_loader = DataLoader(test_dataset, batch_size=config.batch_size, shuffle=False)
 
-dataset = ImageDataset(config.train_root, transform=None)
-class_name = dataset.classes
+#dataset = ImageDataset(config.train_root, transform=None)
+
+train_dataset_full = FineGrainImageDataset(config.train_root, transform=None)
+
+
+class_name     = train_dataset_full.classes
+
+
+#class_name = dataset.classes
 # 저장된 모델 로드
-model = MultiTaskModel(num_classes=len(class_name))
-model.load_state_dict(torch.load('./models/Multitask efficientNet_basemodel.pth', map_location=device))
+#model = SwinArcClassifier(num_classes=len(class_name))
+
+model= FineGrainResNet50(num_classes=len(class_name), pretrained=False).to(device)
+
+
+model.load_state_dict(torch.load('./models/FineGrainResNet50_image512_basemodel.pth', map_location=device))
 model.to(device)
 
 # 추론
@@ -32,10 +45,12 @@ model.eval()
 results = []
 
 with torch.no_grad():
-    for images in test_loader:
+    for images in tqdm(test_loader):
+        #images = images.to(device)
         images = images.to(device)
         #outputs = model(images)
-        outputs, _ = model(images, images)
+        #out_model, out_year = model(images)
+        outputs = model(images)
         probs = F.softmax(outputs, dim=1)
 
         # 각 배치의 확률을 리스트로 변환
@@ -53,17 +68,10 @@ submission = pd.read_csv('./data/sample_submission.csv', encoding='utf-8-sig')
 
 # 'ID' 컬럼을 제외한 클래스 컬럼 정렬
 class_columns = submission.columns[1:]
+#class_columns = submission.columns[1:]
 
-import unicodedata
-
-def normalize_list(str_list):
-    return [unicodedata.normalize('NFC', s) for s in str_list]
-
-class_columns_norm = normalize_list(class_columns)
-pred.columns = normalize_list(pred.columns)
-
-pred = pred[class_columns_norm]
+pred = pred.reindex(columns=class_columns, fill_value=0)
 
 
-submission[class_columns_norm] = pred.values
-submission.to_csv('./output/Multitask_efficientNet_10epoch_argmax.csv', index=False, encoding='utf-8-sig')
+submission[class_columns] = pred.values
+submission.to_csv('./output/FineGrainResNet50_image512.csv', index=False, encoding='utf-8-sig')
