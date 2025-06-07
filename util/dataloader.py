@@ -159,3 +159,23 @@ class FineGrainImageDataset(Dataset):
             img = Image.open(path).convert('RGB')
             if self.transform: img = self.transform(img)
             return img, lbl
+
+
+
+class TTADataset(Dataset):
+    def __init__(self, root_dir, is_test=True): # transform 제거
+        self.root_dir = root_dir
+        self.is_test = is_test
+        self.image_files = sorted([
+            os.path.join(root_dir, f)
+            for f in os.listdir(root_dir)
+            if f.lower().endswith(('.png', '.jpg', '.jpeg')) # 다양한 확장자 지원
+        ])
+
+    def __len__(self):
+        return len(self.image_files)
+
+    def __getitem__(self, idx):
+        image_path = self.image_files[idx]
+        image = Image.open(image_path).convert('RGB')
+        return image, image_path # 원본 PIL 이미지와 경로 반환
