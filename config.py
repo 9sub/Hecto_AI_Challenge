@@ -1,13 +1,13 @@
 
 
-img_size = 1024
-batch_size = 16
-epochs = 30
-lr = 1e-4
+img_size = 512
+batch_size = 32
+epochs = 20
+lr = 1e-5
 seed = 42
 
 train_root = './data/train'
 test_root = './data/test'
 crop_root = './data/train_crop'
 
-model_name = 'FineGrainResNet50_image1024'
+model_name = 'FineGrainResNet50_512_5fold_Contrastive Loss'
