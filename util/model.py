@@ -207,3 +207,99 @@ class FineGrainResNet50(nn.Module):
     def forward(self, x):
         f = self.features(x).flatten(1)
         return self.classifier(f)
+
+
+
+
+class FineGrainResNext50(nn.Module):
+    def __init__(self, num_classes, pretrained=True):
+        super().__init__()
+        backbone = models.resnext50_32x4d(pretrained=pretrained)
+        self.features = nn.Sequential(*list(backbone.children())[:-1])
+        feat_dim = backbone.fc.in_features
+        self.classifier = nn.Linear(feat_dim, num_classes)
+
+    def forward(self, x):
+        f = self.features(x).flatten(1)
+        return self.classifier(f)
+
+
+
+class FineGrainConvNext(nn.Module):
+    def __init__(self, num_classes, pretrained=True):
+        super().__init__()
+        backbone = models.convnext_large(pretrained=pretrained)
+        feat_dim = backbone.classifier[2].in_features
+        backbone.classifier = nn.Identity()
+        
+        # 4) 새로 붙일 classification head
+        self.backbone   = backbone               # convnext: conv blocks + avgpool + flatten
+        self.classifier = nn.Linear(feat_dim, num_classes)
+
+    def forward(self, x):
+        features = self.backbone(x)   # shape: [B, feat_dim]
+        features = torch.flatten(features, 1)
+        # 2) 새로 정의한 head로 분류
+        logits   = self.classifier(features)
+        return logits
+
+
+
+class LoRALinear(nn.Module):
+    """
+    nn.Linear 레이어에 Low-Rank 어댑터(A, B)를 붙인 형태.
+    output = W x + (alpha/r) * B @ (A x)
+    """
+    def __init__(self, in_features, out_features, r=4, alpha=1.0, bias=True):
+        super().__init__()
+        self.in_features  = in_features
+        self.out_features = out_features
+        self.r            = r
+        self.alpha        = alpha
+        self.scaling      = alpha / r
+
+        # (1) 원본 weight, bias: 학습하지 않도록 고정하지만,
+        #     초깃값 자체는 Xavier 초기화
+        self.weight = nn.Parameter(torch.zeros(out_features, in_features), requires_grad=False)
+        if bias:
+            self.bias = nn.Parameter(torch.zeros(out_features), requires_grad=False)
+        else:
+            self.register_parameter('bias', None)
+
+        # (2) LoRA 어댑터용 A, B: 학습 가능
+        self.A = nn.Parameter(torch.randn(r, in_features) * 0.01)
+        self.B = nn.Parameter(torch.zeros(out_features, r))
+
+        # (3) 원본 weight/bias 랜덤 초기화
+        nn.init.xavier_normal_(self.weight)
+        if self.bias is not None:
+            nn.init.zeros_(self.bias)
+
+    def forward(self, x):
+        out_orig = F.linear(x, self.weight, self.bias)
+        lora_out = F.linear(x, self.B @ self.A, bias=None) * self.scaling
+        return out_orig + lora_out
+
+
+class FineGrainResNet50LoRA(nn.Module):
+    def __init__(self, num_classes, pretrained=True, lora_r=8, lora_alpha=16.0):
+        super().__init__()
+        # torchvision 버전에 따라 models.resnet50(weights=...)를 사용해도 무방
+        backbone = models.resnext50_32x4d(pretrained=pretrained)
+
+        # 특징 추출부: 마지막 pooling 직전까지
+        self.features = nn.Sequential(*list(backbone.children())[:-1])  # [B, 2048, 1, 1]
+        feat_dim = backbone.fc.in_features  # 2048
+
+        # LoRA 레이어로 classifier 정의 (랜덤 초기화)
+        self.classifier = LoRALinear(
+            in_features=feat_dim,
+            out_features=num_classes,
+            r=lora_r,
+            alpha=lora_alpha,
+            bias=True
+        )
+
+    def forward(self, x):
+        f = self.features(x).flatten(1)  # → [B, feat_dim]
+        return self.classifier(f)
