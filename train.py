@@ -20,7 +20,7 @@ from sklearn.metrics import log_loss
 import timm
 from util.dataloader import ImageDataset, FineGrainImageDataset
 
-from util.model import BilinearResDense, FineGrainResNet50
+from util.model import BilinearResDense, FineGrainResNet50, FineGrainResNet101
 
 import config
 import wandb
@@ -67,7 +67,7 @@ val_loader = DataLoader(val_dataset, batch_size=config.batch_size, shuffle=False
 
 #model = VisionTransformer(num_classes=len(class_name)).to(device)
 #model = timm.create_model('cait_xxs24_384', pretrained=True, num_classes=396)
-model = FineGrainResNet50(
+model = FineGrainResNet101(
     num_model_classes=len(dataset.model2idx),
     num_year_classes =len(dataset.year2idx)
 ).to(device)

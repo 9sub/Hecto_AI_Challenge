@@ -4,9 +4,8 @@ import torch
 import torch.nn.functional as F
 import pandas as pd
 from tqdm import tqdm
-from util.model import FineGrainResNet50
 
-from util.model import ResNet152, MultiTaskModel, SwinArcClassifier
+from util.model import ResNet152, MultiTaskModel, SwinArcClassifier, FineGrainConvNext, FineGrainResNext50
 from util.dataloader import ImageDataset, FineGrainImageDataset
 import config
 
@@ -34,10 +33,10 @@ class_name     = train_dataset_full.classes
 # 저장된 모델 로드
 #model = SwinArcClassifier(num_classes=len(class_name))
 
-model= FineGrainResNet50(num_classes=len(class_name), pretrained=False).to(device)
+model= FineGrainConvNext(num_classes=len(class_name), pretrained=False).to(device)
 
 
-model.load_state_dict(torch.load('./models/FineGrainResNet50_image512_basemodel.pth', map_location=device))
+model.load_state_dict(torch.load('./models/FineGrainConvNext_224_FocalLoss_basemodel.pth', map_location=device))
 model.to(device)
 
 # 추론
@@ -74,4 +73,4 @@ pred = pred.reindex(columns=class_columns, fill_value=0)
 
 
 submission[class_columns] = pred.values
-submission.to_csv('./output/FineGrainResNet50_image512.csv', index=False, encoding='utf-8-sig')
+submission.to_csv('./output/FineGrainConvNext_224_FocalLoss_basemodel.csv', index=False, encoding='utf-8-sig')
