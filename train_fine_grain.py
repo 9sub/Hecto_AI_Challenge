@@ -18,10 +18,10 @@ from torch import nn, optim
 
 from sklearn.metrics import log_loss
 import timm
-from util.dataloader import ImageDataset, FineGrainImageDataset  # util 폴더의 dataloader 가정
+from util.dataloader import ImageDataset, FineGrainImageDataset, FineGrainChangeLabelDataset  # util 폴더의 dataloader 가정
 
 from util.model import BilinearResDense, FineGrainResNet50, FineGrainConvNext, \
-                       FineGrainResNext50, FineGrainResNet50LoRA
+                      FineGrainResNext50, FineGrainResNet50LoRA
 from util.loss import FocalLoss, ContrastiveLoss  # util 폴더의 loss 가정
 
 import config  # config.py 파일이 있다고 가정
@@ -96,7 +96,7 @@ val_transform = transforms.Compose([
 # =============================================
 
 # 전체 데이터셋 로드 (transform 없음)
-full_dataset = FineGrainImageDataset(config.train_root, transform=None)
+full_dataset = FineGrainChangeLabelDataset(config.train_root, transform=None)
 print(f"총 이미지 수: {len(full_dataset.samples)}")
 
 # 계층적 K-겹 분할을 위해 타겟(레이블) 추출
@@ -152,7 +152,7 @@ for fold, (train_index, val_index) in enumerate(skf.split(full_dataset, targets)
                                   lora_alpha=lora_alpha)
     model.to(device)
 
-    criterion = ContrastiveLoss()
+    criterion = nn.CrossEntropyLoss()
     optimizer = optim.AdamW(
         filter(lambda p: p.requires_grad, model.parameters()),
         lr=config.lr
@@ -185,7 +185,7 @@ for fold, (train_index, val_index) in enumerate(skf.split(full_dataset, targets)
         # ======== Train 단계 ========
         model.train()
         train_loss = 0.0
-        for images, labels in tqdm(train_loader,
+        for images, labels, _ in tqdm(train_loader,
                                    desc=f"[폴드 {fold+1} 에포크 {epoch+1}/{config.epochs}] 훈련"):
             images = images.to(device, non_blocking=True)
             labels = labels.to(device, non_blocking=True)
@@ -217,7 +217,7 @@ for fold, (train_index, val_index) in enumerate(skf.split(full_dataset, targets)
         all_labels = []
 
         with torch.no_grad():
-            for images, labels in tqdm(val_loader,
+            for images, labels, _ in tqdm(val_loader,
                                        desc=f"[폴드 {fold+1} 에포크 {epoch+1}/{config.epochs}] 검증"):
                 images = images.to(device, non_blocking=True)
                 labels = labels.to(device, non_blocking=True)
