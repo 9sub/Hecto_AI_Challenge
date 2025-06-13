@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-from util.model import FineGrainResNet50LoRA
+from util.model import FineGrainResNet50LoRA, MultiTaskResNet50LoRAContrastiveLoss
 from util.dataloader import ImageDataset, FineGrainImageDataset
 import config
 
@@ -48,7 +48,7 @@ checkpoint_dir  = "./models"
 n_splits = 5
 fold_ckpt_paths = [
     os.path.join(checkpoint_dir,
-                 f"FineGrainResNet50_512_5fold_LoRA_augmentation_LoRA_fold_{i+1}_best_acc.pth")
+                 f"FineGrainResNet50_512_5fold_Contrastive Loss_LoRA_fold_{i+1}_best_acc.pth")
     for i in range(n_splits)  # 예: config.n_splits == 5
 ]
 
@@ -71,7 +71,7 @@ for fold_idx, ckpt_path in enumerate(fold_ckpt_paths):
     print(f"[Fold {fold_idx+1}] 체크포인트 로딩: {ckpt_path}")
 
     # (1) 모델 초기화 및 weight 로드
-    model = FineGrainResNet50LoRA(num_classes=C, pretrained=False).to(device)
+    model = MultiTaskResNet50LoRAContrastiveLoss(num_classes=C, pretrained=False).to(device)
     state_dict = torch.load(ckpt_path, map_location=device)
     model.load_state_dict(state_dict)
     model.eval()
@@ -87,7 +87,8 @@ for fold_idx, ckpt_path in enumerate(fold_ckpt_paths):
             B = orig_images.size(0)  # 배치 크기
 
             # (a) 원본 이미지 예측
-            logits_orig = model(orig_images)  # [B, C]
+            #logits_orig = model(orig_images)  # [B, C]
+            _, logits_orig = model(orig_images)  # [B, C]
             probs_orig = F.softmax(logits_orig, dim=1)  # [B, C]
 
             # (b) 확률을 numpy로 변환
@@ -121,6 +122,6 @@ class_columns = submission.columns[1:]  # 'ID' 다음부터 클래스명
 df_probs = pd.DataFrame(avg_probs, columns=class_columns)
 submission[class_columns] = df_probs.values
 
-output_path = './output/FineGrainResNet50_512_5fold_augmentation_ensemble.csv'
+output_path = './output/FineGrainResNet50_512_5fold_contrastive_loss.csv'
 submission.to_csv(output_path, index=False, encoding='utf-8-sig')
 print(f"▶ 최종 결과 저장 완료: {output_path}")
