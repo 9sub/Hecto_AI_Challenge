@@ -179,3 +179,128 @@ class TTADataset(Dataset):
         image_path = self.image_files[idx]
         image = Image.open(image_path).convert('RGB')
         return image, image_path # 원본 PIL 이미지와 경로 반환
+
+
+class FineGrainImageDatasetContrastiveLoss(Dataset):
+    def __init__(self, root_dir, transform=None, is_test=False):
+        self.transform = transform
+        self.is_test = is_test
+
+        if is_test:
+            self.samples = sorted([
+                os.path.join(root_dir, f)
+                for f in os.listdir(root_dir)
+                if f.lower().endswith('.jpg')
+            ])
+            return
+
+        self.classes = sorted([
+            d for d in os.listdir(root_dir)
+            if os.path.isdir(os.path.join(root_dir, d))
+        ])
+        self.class_to_idx = {c:i for i,c in enumerate(self.classes)}
+
+        self.samples = []
+        for c in self.classes:
+            folder = os.path.join(root_dir, c)
+            for f in os.listdir(folder):
+                if f.lower().endswith('.jpg'):
+                    self.samples.append((os.path.join(folder, f), self.class_to_idx[c]))
+
+    def __len__(self):
+        return len(self.samples)
+
+    def __getitem__(self, idx):
+        # 첫 번째 이미지
+        path1, lbl1 = self.samples[idx]
+        img1 = Image.open(path1).convert('RGB')
+        if self.transform: img1 = self.transform(img1)
+
+        # 두 번째 이미지 랜덤 선택
+        idx2 = random.randint(0, len(self.samples)-1)
+        path2, lbl2 = self.samples[idx2]
+        img2 = Image.open(path2).convert('RGB')
+        if self.transform: img2 = self.transform(img2)
+
+        # pair label: 같은 클래스면 1, 아니면 0
+        pair_lbl = 1 if lbl1 == lbl2 else 0
+
+        return img1, img2, lbl1, lbl2, pair_lbl
+
+
+
+class FineGrainChangeLabelDataset(Dataset):
+    def __init__(self, root_dir, transform=None, is_test=False):
+        self.root_dir = root_dir
+        self.transform = transform
+        self.is_test = is_test
+
+        if is_test:
+            # 테스트 모드: 이미지 경로만 저장
+            self.samples = sorted([
+                os.path.join(root_dir, f)
+                for f in os.listdir(root_dir)
+                if f.lower().endswith('.jpg')
+            ])
+            return
+
+        # 1) base 클래스 디렉토리(예: '소나타_2013_2014') 목록 추출
+        base_classes = sorted([
+            d for d in os.listdir(root_dir)
+            if os.path.isdir(os.path.join(root_dir, d))
+        ])
+
+        # 2) pose 디렉토리(예: side, front, back)는 각 base 클래스 내부에 있음
+        #    combined_classes = ['소나타_2013_2014_side', '소나타_2013_2014_front', ...]
+        combined_classes = []
+        for base in base_classes:
+            base_path = os.path.join(root_dir, base)
+            for pose in sorted(os.listdir(base_path)):
+                pose_path = os.path.join(base_path, pose)
+                if os.path.isdir(pose_path):
+                    combined_classes.append(f"{base}_{pose}")
+
+        # 3) 클래스 → 인덱스 매핑
+        self.classes = combined_classes
+        self.class_to_idx = {c: i for i, c in enumerate(self.classes)}
+
+        # 4) (이미지 경로, label_idx) 쌍 생성
+        self.samples = []
+        for base in base_classes:
+            base_path = os.path.join(root_dir, base)
+            for pose in sorted(os.listdir(base_path)):
+                pose_path = os.path.join(base_path, pose)
+                if not os.path.isdir(pose_path):
+                    continue
+                combined = f"{base}_{pose}"
+                idx = self.class_to_idx[combined]
+                for fname in os.listdir(pose_path):
+                    if not fname.lower().endswith('.jpg'):
+                        continue
+                    path = os.path.join(pose_path, fname)
+                    self.samples.append((path, idx))
+
+    def __len__(self):
+        return len(self.samples)
+
+    def __getitem__(self, idx):
+        if self.is_test:
+            # 테스트 모드: 경로만 있음
+            path = self.samples[idx]
+            img = Image.open(path).convert('RGB')
+            if self.transform:
+                img = self.transform(img)
+            return img
+        else:
+            # 학습 모드: 경로와 라벨이 있음
+            path, label = self.samples[idx]
+            img = Image.open(path).convert('RGB')
+            if self.transform:
+                img = self.transform(img)
+
+            # base_class 라벨만 필요할 때:
+            combined_label = self.classes[label]
+            base_label = combined_label.rsplit('_', 1)[0]
+            # base_label 은 예: '소나타_2013_2014'
+
+            return img, label, base_label

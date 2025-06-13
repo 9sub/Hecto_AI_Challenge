@@ -303,3 +303,48 @@ class FineGrainResNet50LoRA(nn.Module):
     def forward(self, x):
         f = self.features(x).flatten(1)  # → [B, feat_dim]
         return self.classifier(f)
+
+
+
+class MultiTaskResNet50LoRAContrastiveLoss(nn.Module):
+    def __init__(self, num_classes, emb_dim=256, pretrained=True, lora_r=8, lora_alpha=16.0):
+        super().__init__()
+        backbone = models.resnext50_32x4d(pretrained=pretrained)
+        # feature extractor
+        self.features = nn.Sequential(*list(backbone.children())[:-1])  # [B,2048,1,1]
+        feat_dim = backbone.fc.in_features
+
+        # projection head for contrastive embedding
+        self.projection = nn.Linear(feat_dim, emb_dim)
+        # LoRA classifier head for softmax
+        self.classifier = LoRALinear(
+            in_features=emb_dim,
+            out_features=num_classes,
+            r=lora_r,
+            alpha=lora_alpha,
+            bias=True
+        )
+
+    def forward(self, x):
+        f = self.features(x).flatten(1)        # [B, feat_dim]
+        emb = self.projection(f)              # [B, emb_dim]
+        logits = self.classifier(emb)         # [B, num_classes]
+        return emb, logits
+
+
+
+# ===============================================================
+# 헬퍼 함수
+# ===============================================================
+
+def count_trainable_parameters(model):
+    """
+    주어진 PyTorch 모델의 학습 가능한 파라미터 수를 계산합니다.
+    """
+    return sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+def get_total_parameters(model):
+    """
+    주어진 PyTorch 모델의 총 파라미터 수를 계산합니다 (학습 가능/불가능 모두 포함).
+    """
+    return sum(p.numel() for p in model.parameters())
