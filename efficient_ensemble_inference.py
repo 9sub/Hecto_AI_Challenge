@@ -7,6 +7,7 @@ import config
 from util.dataloader import FineGrainImageDataset, FineGrainChangeLabelDataset  # 수정된 데이터셋 사용
 from efficient_ensemble_train import EfficientNetB0Model, SimpleCombinationLayer
 import torchvision.transforms as transforms
+from efficient_ensemble_train import FineGrainImageDataset
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -19,11 +20,11 @@ val_transform = transforms.Compose([
 ])
 
 # 테스트 데이터셋 생성 (is_test=True로 설정)
-test_dataset = FineGrainChangeLabelDataset(config.test_root, transform=val_transform, is_test=True)
+test_dataset = FineGrainImageDataset(config.test_root, transform=val_transform, is_test=True)
 test_loader = DataLoader(test_dataset, batch_size=config.batch_size, shuffle=False)
 
 # 클래스 정보 로드 (학습 데이터셋에서)
-train_dataset = FineGrainChangeLabelDataset(config.train_root, transform=None, is_test=False)
+train_dataset = FineGrainImageDataset(config.train_root, transform=None, is_test=False)
 class_names = train_dataset.classes
 num_classes = len(class_names)
 
@@ -35,9 +36,9 @@ model1 = EfficientNetB0Model(num_classes=num_classes, pretrained=False).to(devic
 model2 = EfficientNetB0Model(num_classes=num_classes, pretrained=False).to(device)
 combination_layer = SimpleCombinationLayer(num_models=2, num_classes=num_classes).to(device)
 
-model1.load_state_dict(torch.load('./models/EfficientNet-b0_Model_1_best_acc.pth', map_location=device))
-model2.load_state_dict(torch.load('./models/EfficientNet-b0_Model_2_best_acc.pth', map_location=device))
-combination_layer.load_state_dict(torch.load('./models/Adaptive_Combination_Layer_best.pth', map_location=device))
+model1.load_state_dict(torch.load('./models/EfficientNet-b0_Model_1_best_logloss.pth', map_location=device))
+model2.load_state_dict(torch.load('./models/EfficientNet-b0_Model_2_best_logloss.pth', map_location=device))
+combination_layer.load_state_dict(torch.load('./models/Adaptive_Combination_Layer_best_logloss.pth', map_location=device))
 
 model1.eval()
 model2.eval()
